@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rescue The Hiker — Host</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a160a;color:#fff;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px;}
+h1{font-size:26px;font-weight:700;color:#aed581;text-align:center;margin-bottom:4px;}
+.sub{font-size:13px;color:#555;text-align:center;margin-bottom:24px;}
+
+/* State panels */
+.panel{width:100%;max-width:700px;display:none;}
+.panel.active{display:block;}
+
+/* Code display */
+.code-box{background:#1a2e1a;border:2px solid #4caf50;border-radius:16px;padding:32px;text-align:center;margin-bottom:20px;}
+.code-label{font-size:13px;color:#aed581;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.code-digits{font-size:72px;font-weight:700;color:#fff;letter-spacing:16px;font-variant-numeric:tabular-nums;}
+.code-hint{font-size:13px;color:#555;margin-top:10px;}
+
+/* Stats row */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.stat{background:#141e14;border:1px solid #1e2e1e;border-radius:10px;padding:16px;text-align:center;}
+.stat-val{font-size:30px;font-weight:700;color:#81c784;}
+.stat-lbl{font-size:11px;color:#555;margin-top:3px;}
+
+/* Timer bar */
+.timer-wrap{width:100%;height:12px;background:#1a1a1a;border-radius:6px;overflow:hidden;margin-bottom:20px;}
+.timer-bar{height:100%;background:#4caf50;border-radius:6px;transition:width 1s linear,background .3s;}
+
+/* Buttons */
+.btn{display:block;width:100%;padding:14px;font-size:15px;font-weight:600;border:none;border-radius:10px;cursor:pointer;margin-bottom:10px;transition:opacity .15s;}
+.btn:hover{opacity:.88;}
+.btn-green{background:#2e7d32;color:#fff;}
+.btn-amber{background:#f57f17;color:#fff;}
+.btn-red{background:#c62828;color:#fff;}
+.btn-gray{background:#263626;color:#aaa;border:1px solid #2a3a2a;}
+
+/* Leaderboard */
+.lb-title{font-size:16px;font-weight:600;color:#aed581;margin-bottom:12px;text-align:center;}
+.lb-table{width:100%;border-collapse:collapse;}
+.lb-table th{font-size:11px;color:#444;text-align:left;padding:6px 12px;border-bottom:1px solid #1a2a1a;}
+.lb-table td{padding:11px 12px;font-size:14px;border-bottom:1px solid #0e180e;}
+.lb-table tr:hover td{background:#0f1f0f;}
+.medal{font-size:18px;width:30px;}
+.name-col{color:#e8f5e9;}
+.score-col{font-weight:700;color:#81c784;text-align:right;width:100px;}
+.status-pill{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-align:center;}
+.pill-done{background:#1b5e20;color:#81c784;}
+.pill-play{background:#0d1f3c;color:#90caf9;}
+
+/* Player chips */
+.chips-wrap{margin-top:16px;}
+.chips-lbl{font-size:12px;color:#444;margin-bottom:6px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{padding:4px 10px;background:#141e14;border:1px solid #1e2e1e;border-radius:12px;font-size:12px;color:#888;}
+.chip.done{border-color:#2e7d32;color:#81c784;}
+
+/* End screen overlay feel */
+.end-banner{background:#0d1f0d;border:2px solid #4caf50;border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;}
+.end-banner h2{font-size:22px;color:#aed581;margin-bottom:6px;}
+.end-banner p{font-size:13px;color:#666;}
+
+/* Error */
+.err{color:#ef9a9a;font-size:13px;text-align:center;margin-bottom:8px;min-height:18px;}
+</style>
+</head>
+<body>
+
+<h1>Rescue The Hiker</h1>
+<p class="sub">Host / Admin Screen</p>
+
+<!-- ── IDLE: create room ── -->
+<div class="panel active" id="panel-idle">
+  <div style="text-align:center;padding:40px 0;">
+    <div style="font-size:15px;color:#555;margin-bottom:24px;">Tiada bilik aktif. Cipta bilik baharu untuk memulakan sesi.</div>
+    <button class="btn btn-green" style="max-width:260px;margin:0 auto;" id="createBtn">Cipta Bilik</button>
+    <div class="err" id="idle-err"></div>
+  </div>
+</div>
+
+<!-- ── WAITING: show code, wait for players ── -->
+<div class="panel" id="panel-waiting">
+  <div class="code-box">
+    <div class="code-label">Kod Bilik</div>
+    <div class="code-digits" id="code-display">----</div>
+    <div class="code-hint">Tunjukkan kod ini kepada pemain. Pergi ke <strong id="game-url">...</strong> untuk menyertai.</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="w-count">0</div><div class="stat-lbl">Pemain Bersedia</div></div>
+    <div class="stat"><div class="stat-val" id="w-max">50</div><div class="stat-lbl">Had Pemain</div></div>
+    <div class="stat"><div class="stat-val">5:00</div><div class="stat-lbl">Masa Sesi</div></div>
+  </div>
+  <div class="chips-wrap">
+    <div class="chips-lbl">Pemain yang telah menyertai:</div>
+    <div class="chips" id="w-chips"><span style="color:#333;font-size:12px;">Menunggu pemain...</span></div>
+  </div>
+  <div style="margin-top:20px;">
+    <button class="btn btn-green" id="startBtn">Mulakan Permainan</button>
+    <button class="btn btn-gray"  id="waitResetBtn">Batal &amp; Reset</button>
+    <div class="err" id="wait-err"></div>
+  </div>
+</div>
+
+<!-- ── PLAYING: live stats ── -->
+<div class="panel" id="panel-playing">
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="p-timer">5:00</div><div class="stat-lbl">Masa Tinggal</div></div>
+    <div class="stat"><div class="stat-val" id="p-count">0</div><div class="stat-lbl">Pemain Aktif</div></div>
+    <div class="stat"><div class="stat-val" id="p-done">0</div><div class="stat-lbl">Selesai</div></div>
+  </div>
+  <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+  <div class="lb-title">Kedudukan Semasa</div>
+  <table class="lb-table">
+    <thead><tr><th></th><th>#</th><th>Nama</th><th style="text-align:right">Mata</th><th style="text-align:center">Status</th></tr></thead>
+    <tbody id="p-lb"></tbody>
+  </table>
+  <div class="chips-wrap" style="margin-top:12px;">
+    <div class="chips-lbl">Semua pemain:</div>
+    <div class="chips" id="p-chips"></div>
+  </div>
+  <div style="margin-top:16px;">
+    <button class="btn btn-amber" id="forceEndBtn">Tamatkan Sekarang</button>
+  </div>
+</div>
+
+<!-- ── ENDED: final leaderboard ── -->
+<div class="panel" id="panel-ended">
+  <div class="end-banner">
+    <h2 id="end-reason-text">Permainan Tamat!</h2>
+    <p id="end-summary"></p>
+  </div>
+  <div class="lb-title">Papan Markah Akhir — Top 10</div>
+  <table class="lb-table">
+    <thead><tr><th></th><th>#</th><th>Nama</th><th style="text-align:right">Mata</th></tr></thead>
+    <tbody id="end-lb"></tbody>
+  </table>
+  <div style="margin-top:20px;">
+    <button class="btn btn-green" id="newRoomBtn">Mulakan Sesi Baharu</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io({
+  transports: ['polling', 'websocket'], // polling first — required for Railway
+});
+const medals = ['🥇','🥈','🥉'];
+
+/* ── Panel switching ── */
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ── Timer ── */
+let timerInterval = null;
+let sessionEndAt  = null;
+
+function startClientTimer(remainingMs) {
+  clearInterval(timerInterval);
+  sessionEndAt = Date.now() + remainingMs;
+  timerInterval = setInterval(() => {
+    const left = Math.max(0, sessionEndAt - Date.now());
+    const mins = Math.floor(left / 60000);
+    const secs = Math.floor((left % 60000) / 1000);
+    const txt  = mins + ':' + String(secs).padStart(2,'0');
+    document.getElementById('p-timer').textContent = txt;
+    const pct  = (left / (5 * 60 * 1000)) * 100;
+    const bar  = document.getElementById('timer-bar');
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 50 ? '#4caf50' : pct > 20 ? '#f5c542' : '#e53935';
+    if (left === 0) clearInterval(timerInterval);
+  }, 500);
+}
+
+/* ── Render leaderboard rows ── */
+function renderLB(tbodyId, lb, showStatus) {
+  const tbody = document.getElementById(tbodyId);
+  if (!lb.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#333;padding:16px;">Belum ada markah...</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lb.map((e,i) => `
+    <tr>
+      <td class="medal">${medals[i] || ''}</td>
+      <td style="color:#444;font-size:12px">#${e.rank || i+1}</td>
+      <td class="name-col">${e.name}</td>
+      <td class="score-col">${e.score}</td>
+      ${showStatus ? `<td><span class="status-pill ${e.finished ? 'pill-done':'pill-play'}">${e.finished?'Selesai':'Main'}</span></td>` : '<td></td>'}
+    </tr>`).join('');
+}
+
+/* ── Render player chips ── */
+function renderChips(elId, players) {
+  const el = document.getElementById(elId);
+  if (!players.length) { el.innerHTML = '<span style="color:#333;font-size:12px;">Tiada pemain.</span>'; return; }
+  el.innerHTML = players.map(p =>
+    `<div class="chip ${p.finished?'done':''}">${p.name}${p.finished?' ✓':''}</div>`
+  ).join('');
+}
+
+/* ── Socket events ── */
+
+socket.on('room_created', ({ code }) => {
+  document.getElementById('code-display').textContent = code;
+  document.getElementById('game-url').textContent = window.location.origin;
+  document.getElementById('w-count').textContent = '0';
+  showPanel('panel-waiting');
+});
+
+socket.on('player_joined', ({ name, playerCount }) => {
+  document.getElementById('w-count').textContent = playerCount;
+});
+
+socket.on('player_list', (players) => {
+  document.getElementById('w-count').textContent = players.length;
+  document.getElementById('p-count').textContent = players.length;
+  document.getElementById('p-done').textContent  = players.filter(p=>p.finished).length;
+  renderChips('w-chips', players);
+  renderChips('p-chips', players);
+});
+
+socket.on('game_start', ({ remainingMs }) => {
+  showPanel('panel-playing');
+  startClientTimer(remainingMs);
+});
+
+socket.on('score_update', ({ leaderboard, remainingMs, playerCount, finishCount }) => {
+  document.getElementById('p-count').textContent = playerCount;
+  document.getElementById('p-done').textContent  = finishCount;
+  renderLB('p-lb', leaderboard, true);
+  if (remainingMs !== undefined) {
+    const left = remainingMs;
+    const mins = Math.floor(left/60000);
+    const secs = Math.floor((left%60000)/1000);
+    document.getElementById('p-timer').textContent = mins+':'+String(secs).padStart(2,'0');
+  }
+});
+
+socket.on('game_ended', ({ reason, leaderboard, totalPlayers }) => {
+  clearInterval(timerInterval);
+  const reasonText = {
+    time_up:      'Masa Tamat!',
+    all_finished: 'Semua Pemain Selesai!',
+    host_ended:   'Permainan Ditamatkan oleh Host',
+  }[reason] || 'Permainan Tamat';
+  document.getElementById('end-reason-text').textContent = reasonText;
+  document.getElementById('end-summary').textContent = `${totalPlayers} pemain telah menyertai sesi ini.`;
+  renderLB('end-lb', leaderboard, false);
+  showPanel('panel-ended');
+});
+
+socket.on('room_reset', () => {
+  clearInterval(timerInterval);
+  showPanel('panel-idle');
+});
+
+socket.on('error_msg', msg => {
+  document.getElementById('idle-err').textContent = msg;
+  document.getElementById('wait-err').textContent = msg;
+});
+
+/* ── Button handlers ── */
+document.getElementById('createBtn').addEventListener('click', () => {
+  document.getElementById('idle-err').textContent = '';
+  socket.emit('host_create');
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('wait-err').textContent = '';
+  socket.emit('host_start');
+});
+
+document.getElementById('waitResetBtn').addEventListener('click', () => {
+  if (confirm('Reset bilik dan buang semua pemain?')) socket.emit('host_reset');
+});
+
+document.getElementById('forceEndBtn').addEventListener('click', () => {
+  if (confirm('Tamatkan permainan sekarang?')) socket.emit('host_end');
+});
+
+document.getElementById('newRoomBtn').addEventListener('click', () => {
+  socket.emit('host_reset');
+});
+</script>
+</body>
+</html>
