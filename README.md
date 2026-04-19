@@ -1,6 +1,6 @@
 # Rescue The Hiker — Room Server
 
-Kahoot-style single room game server. One room, up to 50 simultaneous players, 5-minute sessions.
+Platformer game with added trivia elements. One room, up to 50 simultaneous players, 5-minute sessions.
 
 ## Quick Start
 
