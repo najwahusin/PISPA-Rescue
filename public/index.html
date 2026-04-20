@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <!--
   ================================================================
   Rescue The Hiker — Standalone Edition v3.0
@@ -132,14 +134,20 @@ body {
   position: absolute;
   display: none;
   z-index: 12;
-  min-width: 160px;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 72px;
-  background: rgba(0,0,0,0.78);
-  border-color: rgba(255,255,255,0.45);
+  width: 180px;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(20,60,20,0.94);
+  color: #fff;
+  border: 1px solid #4caf50;
+  border-radius: 8px;
+  cursor: pointer;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  text-align: center;
 }
 
 /* ── Name / text input ──────────────────────────────────────── */
@@ -216,11 +224,52 @@ body {
 }
 .li  { display: flex; align-items: center; gap: 3px; }
 .lc  { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* ── Landscape orientation lock ─────────────────────────────── */
+/* Rotate portrait screens to landscape */
+@media screen and (orientation: portrait) {
+  body {
+    transform: rotate(90deg);
+    transform-origin: left top;
+    width: 100vh;
+    height: 100vw;
+    overflow-x: hidden;
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
+}
+/* Warn users if rotation isn't possible */
+#rotate-msg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #0a160a;
+  color: #aed581;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 9999;
+  font-family: 'Segoe UI', sans-serif;
+}
+@media screen and (orientation: portrait) and (max-width: 500px) {
+  #rotate-msg { display: flex; }
+  body > #wrap { display: none; }
+}
 </style>
 <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
+<div id="rotate-msg">
+  <div style="font-size:48px;">&#8635;</div>
+  <div>Putar peranti anda</div>
+  <div style="font-size:14px;color:#555;font-weight:400;">Permainan ini dimainkan dalam mod landskap</div>
+</div>
 <div id="wrap">
 
   <!-- ── HUD ─────────────────────────────────────────────────── -->
@@ -342,6 +391,11 @@ body {
     </div>
 
     <!-- Dig bar -->
+    <!-- Cave dig button — appears above cave when player is near -->
+    <button id="cave-touch">
+      Gali — Tahan!
+    </button>
+
     <div id="dig-wrap">
       <div id="dig-label" style="font-size:11px;color:#fff;">Menggali...</div>
       <div id="dig-bg"><div id="dig-fill"></div></div>
@@ -932,9 +986,14 @@ function updateCaveTouchButton() {
   const canShow = isCaveVisible && nearCave && gs === 'playing';
 
   if (canShow) {
+    const secs = hasShovel ? CFG.SHOVEL_DIG_SEC : CFG.HANDS_DIG_SEC;
+    const tool = hasShovel ? 'Penyodok' : 'Tangan';
+    caveTouchBtn.textContent = 'Gali (' + tool + ' • ' + secs + 's) — Tahan!';
+    const btnW = 180;
+    const idealLeft = caveScreenX - btnW / 2;
+    caveTouchBtn.style.left    = Math.min(Math.max(idealLeft, 8), CFG.W - btnW - 8) + 'px';
+    caveTouchBtn.style.bottom  = '80px';
     caveTouchBtn.style.display = 'block';
-    caveTouchBtn.style.left = Math.min(Math.max(caveScreenX + 20, 12), CFG.W - 180) + 'px';
-    caveTouchBtn.style.bottom = '72px';
   } else {
     caveTouchBtn.style.display = 'none';
   }
@@ -1391,11 +1450,15 @@ function updatePlayer() {
   const windMult = windActive ? CFG.WIND_SPEED_MULT : 1;
   const moveSpeed = CFG.PLAYER_SPEED * windMult;
 
-  if      (goLeft)  { P.vx = -moveSpeed; P.face=-1; }
-  else if (goRight) { P.vx =  moveSpeed; P.face= 1; }
-  else              { P.vx *= .7; }
-
-  if (jump && P.gr) { P.vy = CFG.JUMP_FORCE; P.gr=false; playSound(SFX_JUMP); }
+  /* Freeze all movement while dig button is held */
+  if (digHeld) {
+    P.vx = 0;
+  } else {
+    if      (goLeft)  { P.vx = -moveSpeed; P.face=-1; }
+    else if (goRight) { P.vx =  moveSpeed; P.face= 1; }
+    else              { P.vx *= .7; }
+    if (jump && P.gr) { P.vy = CFG.JUMP_FORCE; P.gr=false; playSound(SFX_JUMP); }
+  }
 
   P.vy += CFG.GRAVITY;
   P.x  += P.vx;
@@ -1870,29 +1933,30 @@ document.getElementById('lb-clear').addEventListener('click', () => {
 
 function setupCaveTouch() {
   if (!caveTouchBtn) return;
-  caveTouchBtn.addEventListener('touchstart', e => {
-    e.preventDefault();
-    if (P && Math.abs(P.x - (CFG.LEVEL_W - 200)) < 90) {
-      digHeld = true;
-    }
-  }, { passive: false });
 
-  caveTouchBtn.addEventListener('mousedown', e => {
+  const startDig = e => {
     e.preventDefault();
-    if (P && Math.abs(P.x - (CFG.LEVEL_W - 200)) < 90) {
+    e.stopPropagation();
+    if (P && Math.abs(P.x - (CFG.LEVEL_W - 200)) < 120) {
       digHeld = true;
+      /* Stop movement immediately when button tapped */
+      touchLeft  = false;
+      touchRight = false;
+      P.vx = 0;
     }
-  });
+  };
 
   const stopDig = e => {
     e.preventDefault();
     digHeld = false;
   };
 
-  caveTouchBtn.addEventListener('touchend', stopDig);
-  caveTouchBtn.addEventListener('touchcancel', stopDig);
-  caveTouchBtn.addEventListener('mouseup', stopDig);
-  caveTouchBtn.addEventListener('mouseleave', stopDig);
+  caveTouchBtn.addEventListener('touchstart',  startDig, { passive: false });
+  caveTouchBtn.addEventListener('touchend',    stopDig,  { passive: false });
+  caveTouchBtn.addEventListener('touchcancel', stopDig,  { passive: false });
+  caveTouchBtn.addEventListener('mousedown',   startDig);
+  caveTouchBtn.addEventListener('mouseup',     stopDig);
+  caveTouchBtn.addEventListener('mouseleave',  stopDig);
 }
 
 /* Initialise touch controls */
