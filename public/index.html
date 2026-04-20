@@ -225,21 +225,9 @@ body {
 .li  { display: flex; align-items: center; gap: 3px; }
 .lc  { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
-/* ── Landscape orientation lock ─────────────────────────────── */
-/* Rotate portrait screens to landscape */
-@media screen and (orientation: portrait) {
-  body {
-    transform: rotate(90deg);
-    transform-origin: left top;
-    width: 100vh;
-    height: 100vw;
-    overflow-x: hidden;
-    position: absolute;
-    top: 100%;
-    left: 0;
-  }
-}
-/* Warn users if rotation isn't possible */
+/* ── Portrait overlay — no body transforms, just overlay ──────
+   Never rotate/resize body — breaks mobile browsers entirely.
+   Instead show a friendly overlay when in portrait mode.      */
 #rotate-msg {
   display: none;
   position: fixed;
@@ -252,23 +240,27 @@ body {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   z-index: 9999;
   font-family: 'Segoe UI', sans-serif;
 }
-@media screen and (orientation: portrait) and (max-width: 500px) {
+@media screen and (orientation: portrait) and (max-device-width: 768px) {
+  /* Only show rotate message on actual phones in portrait.
+     Desktop portrait windows should still show the game. */
   #rotate-msg { display: flex; }
-  body > #wrap { display: none; }
 }
 </style>
 <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
+<!-- Shown only on phones in portrait mode — no body transforms used -->
 <div id="rotate-msg">
-  <div style="font-size:48px;">&#8635;</div>
+  <div style="font-size:56px;line-height:1;">&#8635;</div>
   <div>Putar peranti anda</div>
-  <div style="font-size:14px;color:#555;font-weight:400;">Permainan ini dimainkan dalam mod landskap</div>
+  <div style="font-size:13px;color:#555;font-weight:400;max-width:240px;line-height:1.5;">
+    Permainan ini dimainkan dalam mod landskap (landscape)
+  </div>
 </div>
 <div id="wrap">
 
@@ -1961,6 +1953,14 @@ function setupCaveTouch() {
 
 /* Initialise touch controls */
 setupTouch();
+
+/* Request landscape orientation lock on mobile (Android Chrome supports this).
+   iOS Safari does not support lock() but the CSS overlay covers it instead.  */
+if (screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('landscape').catch(() => {
+    // Silently ignore — browser may not allow lock (iOS, desktop, etc.)
+  });
+}
 setupCaveTouch();
 
 /* ── End of script ── */
